@@ -86,9 +86,6 @@ void main(void){
 
 
 
-  // Timer 0 {{{
-  T0CS=0; //TMR0 Internal instruction cycle
-  // Timer 0 }}}
 
   INTCON=0b11100000;
   //       76543210
@@ -101,6 +98,9 @@ void main(void){
   OPTION_REGbits.PS=impint;
 
 
+  // Timer 0 {{{
+  T0CS=0; //TMR0 Internal instruction cycle
+  // Timer 0 }}}
   // Timer 1 {{{
   TMR1H=TMR1L=0;  // clear counters
   T1CON=0b00100000;  // presc 1:4
@@ -124,7 +124,8 @@ void main(void){
 
   TXSTA=0b10000110;
   RCSTA=0b10010000;
-  SPBRG=25; //9600
+
+  SPBRG=25;  //9600
   SPBRG=207; //1200
 
   rs_send("\nLed Driver\n");
