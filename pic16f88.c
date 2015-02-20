@@ -1,8 +1,9 @@
 #define __16f88
 #include <pic14/pic16f88.h>
 #include<string.h>
-#include <stdlib.h> //atoi
-
+#include <stdlib.h>
+  //strcpy & strlen
+  //atoi & itoa
 
 typedef unsigned int config;
 config __at _CONFIG1 gCONFIG1 =
