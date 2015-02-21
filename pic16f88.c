@@ -41,8 +41,8 @@ _CP_OFF;
 char uartRXi=0;
 char uartTXi=0;
 char uartTXlen=0;
-char uartRXbuf[24];
-char uartTXbuf[24];
+char uartRXbuf[27];
+char uartTXbuf[27];
 char tmpstr[8];
 unsigned int tmpint;
 
@@ -172,16 +172,47 @@ static void interruptf(void) __interrupt 0 {
   if(TMR0IF){
     TMR0IF=0;
     if(TMR0IE){
+      RB_WRAP=1;
+
+
+
       RB_BAUD=1;
       PORTA=portaMask;
       PORTA=0x0;
       RB_BAUD=0;
-
       if((++nPeaks_i)>=nPeaks){
         TMR0IE=0;
         RB_WRAP=0;
         RB_NWRAP=1;
       }
+    }
+  }
+  /*}}}*/
+  // IRQ Timer 1/*{{{*/
+  if(TMR1IF){
+    TMR1IF=0;
+    if(TMR1ON){
+      if((++t1postscale_i)>t1postscale){
+        //TMR0IE=0; //disable TMR0
+        RB_GATE=0;
+        //TMR2ON=0;  should present
+        TMR1ON=0;
+        rs_send("Tout");
+        RB_READY=1;
+      }
+    }
+  }
+  /*}}}*/
+  // IRQ Timer 2/*{{{*/
+  if(TMR2IF){
+    TMR2IF=0;
+    if(TMR2ON){
+      RB_WRAP=1;  // this should be in the if
+      TMR2ON=0;
+      nPeaks_i=0;
+      RB_NWRAP=0;
+      TMR0=125; // impulses in the middle of the wrap
+      TMR0IE=1;
     }
   }
   /*}}}*/
@@ -192,7 +223,6 @@ static void interruptf(void) __interrupt 0 {
       run();
       rs_send("Ext T");
     }
-    return;
   }
   /*}}}*/
   // IRQ AUSART Receive {{{
@@ -236,7 +266,7 @@ static void interruptf(void) __interrupt 0 {
               break;
 
             case 't': //impulse interval
-              if(uartRXi>1)impint=atoi(&(uartRXbuf[1]));
+              if(uartRXi>1)impint=(atoi(&(uartRXbuf[1]))&0b111);
               _itoa(64<<impint,tmpstr,10);
               OPTION_REGbits.PS=impint;
               rs_send(tmpstr);
@@ -264,11 +294,11 @@ static void interruptf(void) __interrupt 0 {
 
             case '?': case 'h': //help
               switch (uartRXbuf[1]){
-                case 'n':rs_send("num imp"); break;
-                case 'm':rs_send("porta mask"); break;
-                case 't':rs_send("imp int (64^#)us"); break;
-                case 'g':rs_send("gate ~(#/4)s"); break;
-                case 'o':rs_send("offs (#)ms"); break;
+                case 'n':rs_send("num imp [0-250]"); break;
+                case 'm':rs_send("porta mask [0-F]"); break;
+                case 't':rs_send("imp int (64^#)us [0-7]"); break;
+                case 'g':rs_send("gate ~(#/4)s [0-250]"); break;
+                case 'o':rs_send("offs (#)ms [0-16]"); break;
                 default:
                          rs_send("[h?][nmtgo]");
               }
@@ -307,28 +337,4 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   // AUSART Transmit }}}
-  // IRQ Timer 1/*{{{*/
-  if(TMR1IF){
-    TMR1IF=0;
-    if((++t1postscale_i)>t1postscale){
-      RB_GATE=0;
-      TMR2ON=0;
-      TMR1ON=0;
-      TMR0IE=0; //disable TMR0
-      rs_send("Tout");
-      RB_READY=1;
-    }
-  }
-  /*}}}*/
-  // IRQ Timer 2/*{{{*/
-  if(TMR2IF){
-    TMR2IF=0;
-    TMR2ON=0;
-    nPeaks_i=0;
-    RB_WRAP=1;
-    RB_NWRAP=0;
-    TMR0=125; // impulses in the middle of the wrap
-    TMR0IE=1;
-  }
-  /*}}}*/
 }
