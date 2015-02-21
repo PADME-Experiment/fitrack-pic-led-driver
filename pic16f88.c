@@ -2,8 +2,23 @@
 #include<pic14/pic16f88.h>
 #include<string.h>
 #include<stdlib.h>
-  //strcpy & strlen
-  //atoi & itoa
+//strcpy & strlen
+//atoi & itoa
+
+
+
+// On trigger signal Timer1 and Timer2 are started
+// simultaneously.
+// Timer2, when finish, starts Timer0.
+// Timer0 is the one responsible of the PORTA pins
+// toggleing.
+// Timer0 makes nPeaks spikes on PORTA.
+// If Timer1 finish before Timer0 or Timer1 it switches off
+// everything.
+//
+// External triggers are accepted on RB0.
+
+
 
 typedef unsigned int config;
 config __at _CONFIG1 gCONFIG1 =
@@ -73,6 +88,7 @@ void run(){/*{{{*/
 
 void main(void){
   // Global configuration/*{{{*/
+
   //int i=0;
   TRISA=0x0;
   TRISB=0x1;
@@ -80,21 +96,26 @@ void main(void){
 
   OSCCON=0b01101110;       // Fosc 4MHz
   IOFS=0; while(IOFS!=1);  // wait for stable frequency
-  SWDTEN=0; //disable watchdog
-  WDTCON=0; // presc watchdog 1:32
 
   // Interrupts setting
   INTCON=0b11100000;
   //       76543210
   PIE1=0b0110011;
-  //    76543210
+  //     6543210
+
+  // watchdog
+  SWDTEN=0; //disable watchdog
+  WDTCON=0; // presc watchdog 1:32
+
+  /*}}}*/
+  // Configure Timer 0/*{{{*/
 
   INT0IE=1;  // enable interrupts on RB0 Debug only
   PSA=0; // prescaler is assigned to the Timer0
   OPTION_REGbits.PS=impint;
-/*}}}*/
-  // Configure Timer 0/*{{{*/
+
   T0CS=0; //TMR0 Internal instruction cycle
+
   /*}}}*/
   // Configure Timer 1/*{{{*/
   TMR1H=TMR1L=0;  // clear counters
@@ -102,14 +123,14 @@ void main(void){
 
   TMR1ON=0; //T1CON|=0b00000001;  // enable timer 1
   TMR1IE=1;
-/*}}}*/
+  /*}}}*/
   // Configure Timer 2/*{{{*/
   TMR2=0;
   TMR2IE=1;
   T2CON=0b00000001; // t2 is off, postscale 1:1, prescale 1:4
   T2CON&=0b111;T2CON|=impOffset*0b1000; // preserves last 3 bits and changes first four
   PR2=250; // t2 period
-/*}}}*/
+  /*}}}*/
   // Configure RS232/*{{{*/
   SYNC=0;
   SPEN=1;
@@ -123,14 +144,15 @@ void main(void){
   //  SPBRG=25;  //9600
   SPBRG=207; //1200
 
-  rs_send("\nLed Driver\n");
+  rs_send("\nPic Led Driver\n");
   TXIE=1;
-/*}}}*/
+  /*}}}*/
   while(1){ }
 }
 
+
 static void interruptf(void) __interrupt 0 {
- // IRQ Timer 0{{{*/
+  // IRQ Timer 0{{{*/
   if(TMR0IF){
     TMR0IF=0;
     if((nPeaks_i++)<=nPeaks){
@@ -140,7 +162,7 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   /*}}}*/
- // IRQ Timer 1/*{{{*/
+  // IRQ Timer 1/*{{{*/
   if(TMR1IF){
     TMR1IF=0;
     if((t1postscale_i++)>t1postscale){
@@ -153,16 +175,17 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   /*}}}*/
- // IRQ Timer 2/*{{{*/
+  // IRQ Timer 2/*{{{*/
   if(TMR2IF){
     TMR2IF=0;
     TMR2ON=0;
-    TMR0IE=1;
     nPeaks_i=0;
+    TMR0=0;
+    TMR0IE=1;
     return;
   }
   /*}}}*/
- // IRQ External Trigger RB0/*{{{*/
+  // IRQ External Trigger RB0/*{{{*/
   if(INT0IF){
     INT0IF=0;
     if(RB0==1){
