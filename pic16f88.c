@@ -1,7 +1,7 @@
 #define __16f88
-#include <pic14/pic16f88.h>
+#include<pic14/pic16f88.h>
 #include<string.h>
-#include <stdlib.h>
+#include<stdlib.h>
   //strcpy & strlen
   //atoi & itoa
 
@@ -11,9 +11,7 @@ _LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
 _INTRC_IO & 
 _MCLR_OFF &
 _WDT_OFF  &
-_CP_OFF ;
-
-
+_CP_OFF;
 
 
 char uartRXi=0;
@@ -24,7 +22,6 @@ char uartTXbuf[24];
 char tmpstr[8];
 unsigned int tmpint;
 
-
 unsigned int nPeaks_i;
 unsigned int t1postscale_i;
 
@@ -33,8 +30,6 @@ unsigned char portaMask=0xff;
 unsigned char impOffset=0; // eg 1ms
 unsigned char impint=0;
 unsigned char t1postscale=20;
-
-#define RESTART SWDTEN=1;
 
 void rs_char(char data){/*{{{*/
   uartTXlen=1;
@@ -66,86 +61,77 @@ void wait(){/*{{{*/
   __asm__("nop");
   __asm__("nop");
 }/*}}}*/
-
+void run(){/*{{{*/
+  TMR2=(impOffset==0?PR2:0); // if 0ms offset, make tmr2 to finish immediately
+  //TMR2=0;
+  RB7=1;          // Gate out
+  TMR1H=TMR1L=0;  // clear counters
+  t1postscale_i=0;
+  TMR1ON=1;
+  TMR2ON=1;
+}/*}}}*/
 
 void main(void){
-  int i=0;
+  // Global configuration/*{{{*/
+  //int i=0;
   TRISA=0x0;
   TRISB=0x1;
   PORTA=PORTB=0;
 
-  OSCCON=0b01101110;
-
-  IOFS=0;
-  while(IOFS!=1);
-
-  //gCONFIG1&=0b11111011; //disable watchdog
+  OSCCON=0b01101110;       // Fosc 4MHz
+  IOFS=0; while(IOFS!=1);  // wait for stable frequency
   SWDTEN=0; //disable watchdog
   WDTCON=0; // presc watchdog 1:32
 
-
-
-
-
+  // Interrupts setting
   INTCON=0b11100000;
   //       76543210
-  //
   PIE1=0b0110011;
   //    76543210
 
   INT0IE=1;  // enable interrupts on RB0 Debug only
   PSA=0; // prescaler is assigned to the Timer0
   OPTION_REGbits.PS=impint;
-
-
-  // Timer 0 {{{
+/*}}}*/
+  // Configure Timer 0/*{{{*/
   T0CS=0; //TMR0 Internal instruction cycle
-  // Timer 0 }}}
-  // Timer 1 {{{
+  /*}}}*/
+  // Configure Timer 1/*{{{*/
   TMR1H=TMR1L=0;  // clear counters
   T1CON=0b00100000;  // presc 1:4
 
   TMR1ON=0; //T1CON|=0b00000001;  // enable timer 1
   TMR1IE=1;
-
-  // Timer 1 }}}
-  // Timer 2 {{{
+/*}}}*/
+  // Configure Timer 2/*{{{*/
   TMR2=0;
+  TMR2IE=1;
   T2CON=0b00000001; // t2 is off, postscale 1:1, prescale 1:4
   T2CON&=0b111;T2CON|=impOffset*0b1000; // preserves last 3 bits and changes first four
   PR2=250; // t2 period
-  // Timer 2 }}}
-  // RS232 config{{{
-
+/*}}}*/
+  // Configure RS232/*{{{*/
   SYNC=0;
   SPEN=1;
-  TRISB|=0b111100;
+  TRISB|=0b100100; // 5 & 2=1
   CREN=1; //reception is enabled
 
   TXSTA=0b10000110;
   RCSTA=0b10010000;
 
-  SPBRG=25;  //9600
+  // 9k6 bps is not stable
+  //  SPBRG=25;  //9600
   SPBRG=207; //1200
 
   rs_send("\nLed Driver\n");
   TXIE=1;
-  // RS232 }}}
-
-  while(1){
-  }
+/*}}}*/
+  while(1){ }
 }
 
-
-
-
-
-
-
-
 static void interruptf(void) __interrupt 0 {
-
-  if(TMR0IF) {
+ // IRQ Timer 0{{{*/
+  if(TMR0IF){
     TMR0IF=0;
     if((nPeaks_i++)<=nPeaks){
       PORTA=portaMask;
@@ -153,7 +139,8 @@ static void interruptf(void) __interrupt 0 {
     }
     return;
   }
-
+  /*}}}*/
+ // IRQ Timer 1/*{{{*/
   if(TMR1IF){
     TMR1IF=0;
     if((t1postscale_i++)>t1postscale){
@@ -165,7 +152,8 @@ static void interruptf(void) __interrupt 0 {
     }
     return;
   }
-
+  /*}}}*/
+ // IRQ Timer 2/*{{{*/
   if(TMR2IF){
     TMR2IF=0;
     TMR2ON=0;
@@ -173,23 +161,18 @@ static void interruptf(void) __interrupt 0 {
     nPeaks_i=0;
     return;
   }
-
-  if(INT0IF){  // external gate
+  /*}}}*/
+ // IRQ External Trigger RB0/*{{{*/
+  if(INT0IF){
     INT0IF=0;
     if(RB0==1){
-      TMR2=0;
-      RB7=1;    // Gate out
-      TMR1H=TMR1L=0;  // clear counters
-      t1postscale_i=0;
-      TMR1ON=1;
-      TMR2ON=1;
+      run();
+      rs_send("Ext T");
     }
-    rs_send("Ext T");
     return;
   }
-
-  // Receive just after the transmit part
-  // AUSART Receive {{{
+  /*}}}*/
+  // IRQ AUSART Receive {{{
   if(RCIF){
     char tmp;
     tmp=RCREG;
@@ -198,20 +181,14 @@ static void interruptf(void) __interrupt 0 {
       case '': case '': //backspace
         uartRXi-=(uartRXi>0?1:0);
         break;
-      case '@':
-        RESTART;
+      case '@': //restart
+        SWDTEN=1; //enable watchdog
         break;
-      case '!': //start
-        TMR2=0;
-        RB7=1;    // Gate out
-        TMR1H=TMR1L=0;  // clear counters
-        t1postscale_i=0;
-        TMR1ON=1;
-        TMR2ON=1;
-        rs_send("Self Trig");
+      case '!': //SW Trigger
+        run();
+        rs_send("Soft Trig");
         break;
-      case '\r':
-      case '\n':
+      case '\r': case '\n':
         if(uartRXi>0){
           uartRXbuf[uartRXi]=0;
           switch (uartRXbuf[0]){
@@ -230,49 +207,41 @@ static void interruptf(void) __interrupt 0 {
               break;
 
             case 'm': // PORTA mask
-              if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b11011111;
+              if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b11011111; // RA5 is allways input
               _itoa(portaMask,tmpstr,2);
               rs_send(tmpstr);
               break;
 
-            case 'i': //impulse interval
+            case 't': //impulse interval
               if(uartRXi>1)impint=atoi(&(uartRXbuf[1]));
               _itoa(64<<impint,tmpstr,10);
               OPTION_REGbits.PS=impint;
               rs_send(tmpstr);
               break;
 
-            case 'o': //offset for the imp, in ms 0=1ms, 15=16ms
-              if(uartRXi>1)impOffset=atoi(&(uartRXbuf[1]));
-              _itoa(impOffset+1,tmpstr,2);
-              rs_send(tmpstr);
-              T2CON&=0b111;T2CON|=impOffset*0b1000; // preserves last 3 bits and changes first four
-              break;
-            case 'G': //Gate
+            case 'g': //Gate
               if(uartRXi>1)t1postscale=atoi(&(uartRXbuf[1]));
               _itoa(t1postscale>>2,tmpstr,10);
               rs_send(tmpstr);
               break;
+
+            case 'o': //offset for the imp
+              if(uartRXi>1)impOffset=atoi(&(uartRXbuf[1]));
+              _itoa(impOffset,tmpstr,2);
+              rs_send(tmpstr);
+              T2CON&=0b111;T2CON|=(impOffset-1)*0b1000; // preserves last 3 bits and changes first four
+              break;
+
             case '?': case 'h': //help
               switch (uartRXbuf[1]){
                 case 'n':rs_send("num imp"); break;
                 case 'm':rs_send("porta mask"); break;
-                case 'i':rs_send("imp int (64<<#)us"); break;
-                case 'G':rs_send("gate ~(#/4)s"); break;
-                case 'S':rs_send("Start w/o gate"); break;
-                case 'o':rs_send("offs 0=1ms 15=16ms"); break;
+                case 't':rs_send("imp int (64^#)us"); break;
+                case 'g':rs_send("gate ~(#/4)s"); break;
+                case 'o':rs_send("offs (#)ms"); break;
                 default:
-                         rs_send("[h?][nmiGSo]");
+                         rs_send("[h?][nmtgo]");
               }
-              break;
-            case 'S': //start
-              TMR2=0;
-              RB7=1;    // Gate out
-              TMR1H=TMR1L=0;  // clear counters
-              t1postscale_i=0;
-              TMR1ON=1;
-              TMR2ON=1;
-              rs_send("Self Trig");
               break;
             default:
               rs_send("N/A cmd");
@@ -292,8 +261,7 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   //AUSART Receive }}}
-
-  // AUSART Transmit {{{
+  // IRQ AUSART Transmit {{{
   if(TXIF){
     if(uartTXlen>0){
       if(uartTXi<uartTXlen){
@@ -308,6 +276,4 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   // AUSART Transmit }}}
-
-  return;
 }
