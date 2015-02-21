@@ -79,7 +79,7 @@ void wait(){/*{{{*/
 void run(){/*{{{*/
   TMR2=(impOffset==0?PR2:0); // if 0ms offset, make tmr2 to finish immediately
   //TMR2=0;
-  RB7=1;          // Gate out
+  RB4=1;          // Gate out
   TMR1H=TMR1L=0;  // clear counters
   t1postscale_i=0;
   TMR1ON=1;
@@ -156,8 +156,13 @@ static void interruptf(void) __interrupt 0 {
   if(TMR0IF){
     TMR0IF=0;
     if((nPeaks_i++)<=nPeaks){
+      RB7=1;
       PORTA=portaMask;
       PORTA=0x0;
+      RB7=0;
+    }else{
+      TMR0IE=0;
+      RB6=0;
     }
     return;
   }
@@ -169,7 +174,9 @@ static void interruptf(void) __interrupt 0 {
       TMR1ON=0;
       TMR2ON=0;
       TMR0IE=0; //disable TMR0
-      RB7=0;    // switch off gate
+      RB7=0;
+      RB6=0;
+      RB4=0;    // switch off gate
       rs_send("Tout");
     }
     return;
@@ -180,6 +187,7 @@ static void interruptf(void) __interrupt 0 {
     TMR2IF=0;
     TMR2ON=0;
     nPeaks_i=0;
+    RB6=1;
     TMR0=0;
     TMR0IE=1;
     return;
@@ -251,8 +259,8 @@ static void interruptf(void) __interrupt 0 {
             case 'o': //offset for the imp
               if(uartRXi>1)impOffset=atoi(&(uartRXbuf[1]));
               _itoa(impOffset,tmpstr,2);
-              rs_send(tmpstr);
               T2CON&=0b111;T2CON|=(impOffset-1)*0b1000; // preserves last 3 bits and changes first four
+              rs_send(tmpstr);
               break;
 
             case '?': case 'h': //help
