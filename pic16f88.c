@@ -185,30 +185,6 @@ static void interruptf(void) __interrupt 0 {
     }
   }
   /*}}}*/
-  // IRQ Timer 1/*{{{*/
-  if(TMR1IF){
-    TMR1IF=0;
-    if((++t1postscale_i)>t1postscale){
-      RB_GATE=0;
-      TMR2ON=0;
-      TMR1ON=0;
-      TMR0IE=0; //disable TMR0
-      rs_send("Tout");
-      RB_READY=1;
-    }
-  }
-  /*}}}*/
-  // IRQ Timer 2/*{{{*/
-  if(TMR2IF){
-    TMR2IF=0;
-    TMR2ON=0;
-    nPeaks_i=0;
-    RB_WRAP=1;
-    RB_NWRAP=0;
-    TMR0=125; // impulses in the middle of the wrap
-    TMR0IE=1;
-  }
-  /*}}}*/
   // IRQ External Trigger RB0/*{{{*/
   if(INT0IF){
     INT0IF=0;
@@ -331,4 +307,28 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   // AUSART Transmit }}}
+  // IRQ Timer 1/*{{{*/
+  if(TMR1IF){
+    TMR1IF=0;
+    if((++t1postscale_i)>t1postscale){
+      RB_GATE=0;
+      TMR2ON=0;
+      TMR1ON=0;
+      TMR0IE=0; //disable TMR0
+      rs_send("Tout");
+      RB_READY=1;
+    }
+  }
+  /*}}}*/
+  // IRQ Timer 2/*{{{*/
+  if(TMR2IF){
+    TMR2IF=0;
+    TMR2ON=0;
+    nPeaks_i=0;
+    RB_WRAP=1;
+    RB_NWRAP=0;
+    TMR0=125; // impulses in the middle of the wrap
+    TMR0IE=1;
+  }
+  /*}}}*/
 }
