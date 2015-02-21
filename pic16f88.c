@@ -263,6 +263,10 @@ static void interruptf(void) __interrupt 0 {
               rs_send(tmpstr);
               break;
 
+            case 'l':  // for ls
+              rs_send("not Linux!\n\rh for help");
+              break;
+
             case '?': case 'h': //help
               switch (uartRXbuf[1]){
                 case 'n':rs_send("num imp"); break;
@@ -274,6 +278,7 @@ static void interruptf(void) __interrupt 0 {
                          rs_send("[h?][nmtgo]");
               }
               break;
+
             default:
               rs_send("N/A cmd");
           }
