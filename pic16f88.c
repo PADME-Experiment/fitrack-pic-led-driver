@@ -6,6 +6,15 @@
 //atoi & itoa
 
 
+#define RB_TRIG  RB0
+#define RB_READY RB1
+//#define RB_RX  RB2
+#define RB_BAUD  RB3
+#define RB_WRAP  RB4
+//#define RB_TX  RB5
+#define RB_NWRAP RB6
+#define RB_GATE  RB7
+
 
 // On trigger signal Timer1 and Timer2 are started
 // simultaneously.
@@ -41,10 +50,10 @@ unsigned int nPeaks_i;
 unsigned int t1postscale_i;
 
 unsigned int  nPeaks=100;
-unsigned char portaMask=0xff;
+unsigned char portaMask=0b11011111;
 unsigned char impOffset=0; // eg 1ms
 unsigned char impint=0;
-unsigned char t1postscale=20;
+unsigned char t1postscale=4;
 
 void rs_char(char data){/*{{{*/
   uartTXlen=1;
@@ -77,13 +86,14 @@ void wait(){/*{{{*/
   __asm__("nop");
 }/*}}}*/
 void run(){/*{{{*/
-  TMR2=(impOffset==0?PR2:0); // if 0ms offset, make tmr2 to finish immediately
   //TMR2=0;
   RB4=1;          // Gate out
+  RB3=0;          // Anti gate
   TMR1H=TMR1L=0;  // clear counters
   t1postscale_i=0;
   TMR1ON=1;
   TMR2ON=1;
+  TMR2=(impOffset==0?PR2-1:0); // if 0ms offset, make tmr2 to finish immediately
 }/*}}}*/
 
 void main(void){
@@ -119,7 +129,8 @@ void main(void){
   /*}}}*/
   // Configure Timer 1/*{{{*/
   TMR1H=TMR1L=0;  // clear counters
-  T1CON=0b00100000;  // presc 1:4
+  T1CON=0b00100100;  // presc 1:4
+  //    0b76543210
 
   TMR1ON=0; //T1CON|=0b00000001;  // enable timer 1
   TMR1IE=1;
@@ -152,17 +163,23 @@ void main(void){
 
 
 static void interruptf(void) __interrupt 0 {
-  // IRQ Timer 0{{{*/
+  // IRQ Timer 0/*{{{*/
   if(TMR0IF){
     TMR0IF=0;
-    if((nPeaks_i++)<=nPeaks){
+    if(
+        (++nPeaks_i)>nPeaks
+        //&&nPeaks>0
+      ){
+      TMR0IE=0;
+      RB6=0;
+      RB1=1;  // anti RB6
+    }else{
+      //RB6=1; //TODO test only
+
       RB7=1;
       PORTA=portaMask;
       PORTA=0x0;
       RB7=0;
-    }else{
-      TMR0IE=0;
-      RB6=0;
     }
     return;
   }
@@ -170,13 +187,15 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 1/*{{{*/
   if(TMR1IF){
     TMR1IF=0;
-    if((t1postscale_i++)>t1postscale){
+    if((++t1postscale_i)>t1postscale){
       TMR1ON=0;
       TMR2ON=0;
       TMR0IE=0; //disable TMR0
       RB7=0;
       RB6=0;
+      RB1=1;  // anti RB6
       RB4=0;    // switch off gate
+      RB3=1;    // Anti gate
       rs_send("Tout");
     }
     return;
@@ -188,6 +207,7 @@ static void interruptf(void) __interrupt 0 {
     TMR2ON=0;
     nPeaks_i=0;
     RB6=1;
+    RB1=0;  // anti RB6
     TMR0=0;
     TMR0IE=1;
     return;
@@ -257,9 +277,12 @@ static void interruptf(void) __interrupt 0 {
               break;
 
             case 'o': //offset for the imp
-              if(uartRXi>1)impOffset=atoi(&(uartRXbuf[1]));
-              _itoa(impOffset,tmpstr,2);
-              T2CON&=0b111;T2CON|=(impOffset-1)*0b1000; // preserves last 3 bits and changes first four
+              if(uartRXi>1){
+                impOffset=atoi(&(uartRXbuf[1]));
+                if(impOffset>16)impOffset=16;
+              }
+              _itoa(impOffset,tmpstr,10);
+              T2CON&=0b111;T2CON|=(impOffset>0?impOffset-1:impOffset)*0b1000; // preserves last 3 bits and changes first four
               rs_send(tmpstr);
               break;
 
