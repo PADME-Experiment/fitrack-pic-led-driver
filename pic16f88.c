@@ -10,10 +10,10 @@
 #define RB_READY RB1
 //#define RB_RX  RB2
 #define RB_BAUD  RB3
-#define RB_WRAP  RB4
+#define RB_WRAP  RB6
 //#define RB_TX  RB5
-#define RB_NWRAP RB6
-#define RB_GATE  RB7
+#define RB_NWRAP RB7
+#define RB_GATE  RB4
 
 
 // On trigger signal Timer1 and Timer2 are started
@@ -86,14 +86,18 @@ void wait(){/*{{{*/
   __asm__("nop");
 }/*}}}*/
 void run(){/*{{{*/
-  //TMR2=0;
-  RB4=1;          // Gate out
-  RB3=0;          // Anti gate
+  RB_READY=0;
+
+  TMR0IE=0; //disable TMR0
+
   TMR1H=TMR1L=0;  // clear counters
   t1postscale_i=0;
   TMR1ON=1;
-  TMR2ON=1;
+
   TMR2=(impOffset==0?PR2-1:0); // if 0ms offset, make tmr2 to finish immediately
+  TMR2ON=1;
+
+  RB_GATE=1;
 }/*}}}*/
 
 void main(void){
@@ -116,11 +120,12 @@ void main(void){
   // watchdog
   SWDTEN=0; //disable watchdog
   WDTCON=0; // presc watchdog 1:32
+  WDTCON=0b1000; // presc watchdog 1:512
 
   /*}}}*/
   // Configure Timer 0/*{{{*/
 
-  INT0IE=1;  // enable interrupts on RB0 Debug only
+  INT0IE=1;  // enable interrupts on RB0 Trigger input
   PSA=0; // prescaler is assigned to the Timer0
   OPTION_REGbits.PS=impint;
 
@@ -145,7 +150,7 @@ void main(void){
   // Configure RS232/*{{{*/
   SYNC=0;
   SPEN=1;
-  TRISB|=0b100100; // 5 & 2=1
+  TRISB2=TRISB5=1;
   CREN=1; //reception is enabled
 
   TXSTA=0b10000110;
@@ -166,39 +171,31 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 0/*{{{*/
   if(TMR0IF){
     TMR0IF=0;
-    if(
-        (++nPeaks_i)>nPeaks
-        //&&nPeaks>0
-      ){
-      TMR0IE=0;
-      RB6=0;
-      RB1=1;  // anti RB6
-    }else{
-      //RB6=1; //TODO test only
-
-      RB7=1;
+    if(TMR0IE){
+      RB_BAUD=1;
       PORTA=portaMask;
       PORTA=0x0;
-      RB7=0;
+      RB_BAUD=0;
+
+      if((++nPeaks_i)>=nPeaks){
+        TMR0IE=0;
+        RB_WRAP=0;
+        RB_NWRAP=1;
+      }
     }
-    return;
   }
   /*}}}*/
   // IRQ Timer 1/*{{{*/
   if(TMR1IF){
     TMR1IF=0;
     if((++t1postscale_i)>t1postscale){
-      TMR1ON=0;
+      RB_GATE=0;
       TMR2ON=0;
+      TMR1ON=0;
       TMR0IE=0; //disable TMR0
-      RB7=0;
-      RB6=0;
-      RB1=1;  // anti RB6
-      RB4=0;    // switch off gate
-      RB3=1;    // Anti gate
       rs_send("Tout");
+      RB_READY=1;
     }
-    return;
   }
   /*}}}*/
   // IRQ Timer 2/*{{{*/
@@ -206,17 +203,16 @@ static void interruptf(void) __interrupt 0 {
     TMR2IF=0;
     TMR2ON=0;
     nPeaks_i=0;
-    RB6=1;
-    RB1=0;  // anti RB6
-    TMR0=0;
+    RB_WRAP=1;
+    RB_NWRAP=0;
+    TMR0=125; // impulses in the middle of the wrap
     TMR0IE=1;
-    return;
   }
   /*}}}*/
   // IRQ External Trigger RB0/*{{{*/
   if(INT0IF){
     INT0IF=0;
-    if(RB0==1){
+    if(RB_TRIG==1){
       run();
       rs_send("Ext T");
     }
