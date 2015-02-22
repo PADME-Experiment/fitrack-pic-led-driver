@@ -7,7 +7,8 @@
 
 
 #define RB_TRIG  RB0
-#define RB_READY RB1
+#define RB_READY_soft RB1
+#define RB_READY RB6
 //#define RB_RX  RB2
 #define RB_BAUD  RB3
 #define RB_WRAP  RB4
@@ -17,7 +18,7 @@
 
 
 //           Blinking LED  ┐     ┌  Gate output
-//        Blinking LED  ┐  │     │  ┌  N/C
+//        Blinking LED  ┐  │     │  ┌  READY
 //     Blinking LED  ┐  │  │     │  │  ┌  TX RS232
 //   Blinking LED ┐  │  │  │  +  │  │  │  ┌  Burst WRAP
 //                ↑  ↑  ↑  ↑     ↑  ↑  ↑  ↑
@@ -31,7 +32,7 @@
 //                ↓  ↓  ↓  ↑     ↑  ↓  ↑  ↓
 //  Blinking LED  ┘  │  │  │  -  │  │  │  └  Baud
 //     Blinking LED  ┘  │  │     │  │  └  RX RS232
-//        Blinking LED  ┘  │     │  └  READY
+//        Blinking LED  ┘  │     │  └  READY_soft
 //                    N/C  ┘     └  Trigger input
 
 
@@ -51,6 +52,7 @@ typedef unsigned int config;
 config __at _CONFIG1 gCONFIG1 =
 _LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
 _INTRC_IO & 
+//_INTRC_CLKOUT & 
 _MCLR_OFF &
 _WDT_OFF  &
 _CP_OFF;
@@ -84,7 +86,7 @@ void rs_send(char* data){/*{{{*/
   uartTXbuf[0]='\n';
   uartTXbuf[1]='\r';
   uartTXlen=2+strlen(data);
-  if(uartTXlen>25){
+  if(uartTXlen>27){
     rs_send("err");
   }else{
     strcpy(&(uartTXbuf[2]),data);
@@ -110,7 +112,7 @@ void wait(){/*{{{*/
 }/*}}}*/
 char run(){/*{{{*/
   if(RB_READY){
-    RB_READY=0;
+    RB_READY=RB_READY_soft=0;
 
     TMR0IE=0; //disable TMR0
 
@@ -201,7 +203,7 @@ void main(void){
   RCSTA=0b10010000;
 
   // 9k6 bps is not stable
-  //  SPBRG=25;  //9600
+  //SPBRG=25;  //9600
   SPBRG=207; //1200
 
   rs_send("\nPic Led Driver\n");
@@ -209,10 +211,12 @@ void main(void){
   /*}}}*/
 
 
-  // delay before ready
-  TMR1H=TMR1L=0;  // clear counters
-  t1postscale_i=0;
-  TMR1ON=1;
+  // // delay before ready
+  // TMR1H=TMR1L=0;  // clear counters
+  // t1postscale_i=0;
+  // TMR1ON=1;
+  RB_READY_soft=0;
+  RB_READY=1;
 
 
   while(1){ }
@@ -246,7 +250,7 @@ static void interruptf(void) __interrupt 0 {
         //TMR2ON=0;  should present
         TMR1ON=0;
         rs_send("READY");
-        RB_READY=1;
+        RB_READY=RB_READY_soft=1;
       }
     }
   }
@@ -290,13 +294,13 @@ static void interruptf(void) __interrupt 0 {
         break;
       case '@': //make ready
         uartRXbuf[uartRXi=0]=0;
-        RB_READY=1;
+        RB_READY=RB_READY_soft=1;
         rs_send("Get READY");
         break;
       case '#':case '': //make busy
         uartRXbuf[uartRXi=0]=0;
         TMR1ON=0;
-        RB_READY=0;
+        RB_READY=RB_READY_soft=0;
         rs_send("Stay BUSY");
         break;
       case '!': //SW Trigger
