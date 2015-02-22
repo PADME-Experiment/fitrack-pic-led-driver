@@ -41,19 +41,20 @@ _CP_OFF;
 char uartRXi=0;
 char uartTXi=0;
 char uartTXlen=0;
-char uartRXbuf[24];
-char uartTXbuf[24];
+char uartRXbuf[30];
+char uartTXbuf[30];
 char tmpstr[8];
 unsigned int tmpint;
 
 unsigned int nPeaks_i;
 unsigned int t1postscale_i;
 
-unsigned int  nPeaks=100;
+unsigned int nPeaks=100;
+unsigned int t1postscale=4;
+
 unsigned char portaMask=0b11011111;
 unsigned char impOffset=0; // eg 1ms
 unsigned char impint=0;
-unsigned char t1postscale=4;
 
 void rs_char(char data){/*{{{*/
   uartTXlen=1;
@@ -85,7 +86,7 @@ void wait(){/*{{{*/
   __asm__("nop");
   __asm__("nop");
 }/*}}}*/
-void run(){/*{{{*/
+char run(){/*{{{*/
   if(RB_READY){
     RB_READY=0;
 
@@ -99,7 +100,9 @@ void run(){/*{{{*/
     TMR2ON=1;
 
     RB_GATE=1;
+    return 1;
   }
+  return 0;
 }/*}}}*/
 
 void main(void){
@@ -168,6 +171,7 @@ void main(void){
 
   TMR1ON=1;
 
+
   while(1){ }
 }
 
@@ -225,8 +229,8 @@ static void interruptf(void) __interrupt 0 {
   if(INT0IF){
     INT0IF=0;
     if(RB_TRIG==1){
-      run();
-      rs_send("Ext T");
+      if(run())
+        rs_send("Ext T");
     }
   }
   /*}}}*/
@@ -239,12 +243,19 @@ static void interruptf(void) __interrupt 0 {
       case '': case '': //backspace
         uartRXi-=(uartRXi>0?1:0);
         break;
-      case '@': //restart
+      case '%': //restart
         SWDTEN=1; //enable watchdog
         break;
+      case '@': //make ready
+        RB_READY=1;
+        break;
+      case '#': //make busy
+        TMR1ON=0;
+        RB_READY=0;
+        break;
       case '!': //SW Trigger
-        run();
-        rs_send("Soft Trig");
+        if(run())
+          rs_send("Soft Trig");
         break;
       case '\r': case '\n':
         if(uartRXi>0){
@@ -299,10 +310,10 @@ static void interruptf(void) __interrupt 0 {
 
             case '?': case 'h': //help
               switch (uartRXbuf[1]){
-                case 'n':rs_send("num imp [0-250]"); break;
+                case 'n':rs_send("num imp [0-32760]"); break;
                 case 'm':rs_send("porta mask [0-F]"); break;
-                case 't':rs_send("imp int (64^#)us [0-7]"); break;
-                case 'g':rs_send("gate ~(#/4)s [0-250]"); break;
+                case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
+                case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
                 case 'o':rs_send("offs (#)ms [0-16]"); break;
                 default:
                          rs_send("[h?][nmtgo]");
