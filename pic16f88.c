@@ -252,18 +252,22 @@ static void interruptf(void) __interrupt 0 {
         uartRXi-=(uartRXi>0?1:0);
         break;
       case '%': //restart
+        uartRXbuf[uartRXi=0]=0;
         SWDTEN=1; //enable watchdog
         break;
       case '@': //make ready
+        uartRXbuf[uartRXi=0]=0;
         RB_READY=1;
         rs_send("READY");
         break;
       case '#': //make busy
+        uartRXbuf[uartRXi=0]=0;
         TMR1ON=0;
         RB_READY=0;
         rs_send("BUSY");
         break;
       case '!': //SW Trigger
+        uartRXbuf[uartRXi=0]=0;
         if(run())
           rs_send("Soft Trig");
         break;
