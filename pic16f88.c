@@ -10,15 +10,16 @@
 #define RB_READY RB1
 //#define RB_RX  RB2
 #define RB_BAUD  RB3
-#define RB_WRAP  RB6
+#define RB_WRAP  RB4
 //#define RB_TX  RB5
 //#define RB_NWRAP RB7
-#define RB_GATE  RB4
+#define RB_GATE  RB7
+
 
 //           Blinking LED  ┐     ┌  Gate output
-//        Blinking LED  ┐  │     │  ┌  
+//        Blinking LED  ┐  │     │  ┌  N/C
 //     Blinking LED  ┐  │  │     │  │  ┌  TX RS232
-//   Blinking LED ┐  │  │  │  +  │  │  │  ┌  
+//   Blinking LED ┐  │  │  │  +  │  │  │  ┌  Burst WRAP
 //                ↑  ↑  ↑  ↑     ↑  ↑  ↑  ↑
 //              ┌─┴──┴──┴──┴──┴──┴──┴──┴──┴─┐
 //              │ 1  0  7  6  P  7  6  5  4 │
@@ -28,10 +29,10 @@
 //              │ 2  3  4  5  p  0  1  2  3 │
 //              └─┬──┬──┬──┬──┬──┬──┬──┬──┬─┘
 //                ↓  ↓  ↓  ↑     ↑  ↓  ↑  ↓
-//  Blinking LED  ┘  │  │  │  -  │  │  │  └  
+//  Blinking LED  ┘  │  │  │  -  │  │  │  └  Baud
 //     Blinking LED  ┘  │  │     │  │  └  RX RS232
 //        Blinking LED  ┘  │     │  └  READY
-//               not used  ┘     └  Trigger input
+//                    N/C  ┘     └  Trigger input
 
 
 
@@ -66,12 +67,12 @@ unsigned int tmpint;
 unsigned int nPeaks_i;
 unsigned int t1postscale_i;
 
-unsigned int nPeaks=100;
-unsigned int t1postscale=4;
+unsigned int nPeaks;
+unsigned int t1postscale;
 
-unsigned char portaMask=0b11011111;
-unsigned char impOffset=0; // eg 1ms
-unsigned char impint=0;
+unsigned char portaMask;
+unsigned char impOffset;
+unsigned char impint;
 
 void rs_char(char data){/*{{{*/
   uartTXlen=1;
@@ -139,6 +140,10 @@ void main(void){
   OSCCON=0b01101110;       // Fosc 4MHz
   IOFS=0; while(IOFS!=1);  // wait for stable frequency
 
+
+
+
+
   // Interrupts setting
   INTCON=0b11100000;
   //       76543210
@@ -151,7 +156,15 @@ void main(void){
   WDTCON=0b1000; // presc watchdog 1:512
   WDTCON=0b1110; // presc watchdog
 
+
   uartRXi=uartTXi=uartTXlen=uartRXbuf[0]=uartTXbuf[0]=uartRXbuf[1]=uartTXbuf[1]=0;
+
+  nPeaks=10;
+  portaMask==0b11011111;
+  t1postscale=4; // ~1 s
+  impOffset=3;
+  impint=2;
+
 
   /*}}}*/
   // Configure Timer 0/*{{{*/
@@ -194,6 +207,7 @@ void main(void){
   rs_send("\nPic Led Driver\n");
   TXIE=1;
   /*}}}*/
+
 
   // delay before ready
   TMR1H=TMR1L=0;  // clear counters
