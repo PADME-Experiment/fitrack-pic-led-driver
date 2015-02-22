@@ -256,10 +256,12 @@ static void interruptf(void) __interrupt 0 {
         break;
       case '@': //make ready
         RB_READY=1;
+        rs_send("READY");
         break;
       case '#': //make busy
         TMR1ON=0;
         RB_READY=0;
+        rs_send("BUSY");
         break;
       case '!': //SW Trigger
         if(run())
@@ -323,8 +325,12 @@ static void interruptf(void) __interrupt 0 {
                 case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
                 case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
                 case 'o':rs_send("offs (#)ms [0-16]"); break;
+                case '1':rs_send("Press ! to self trig"); break;
+                case '2':rs_send("Press @ to make ready"); break;
+                case '3':rs_send("Press # to make busy"); break;
+                case '5':rs_send("Press %% for Restart"); break;
                 default:
-                         rs_send("[h?][nmtgo]");
+                         rs_send("[h?][nmtgo1235]");
               }
               break;
 
