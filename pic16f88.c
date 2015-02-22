@@ -22,10 +22,10 @@
 //                ↑  ↑  ↑  ↑     ↑  ↑  ↑  ↑
 //              ┌─┴──┴──┴──┴──┴──┴──┴──┴──┴─┐
 //              │ 1  0  7  6  P  7  6  5  4 │
-//              │                           │
+//              │             w             │
 //              │    PORTA    S    PORTB    │
-//              │             U             │
-//              │ 2  3  4  5  P  0  1  2  3 │
+//              │             u             │
+//              │ 2  3  4  5  p  0  1  2  3 │
 //              └─┬──┬──┬──┬──┬──┬──┬──┬──┬─┘
 //                ↓  ↓  ↓  ↑     ↑  ↓  ↑  ↓
 //  Blinking LED  ┘  │  │  │  -  │  │  │  └  
@@ -230,7 +230,7 @@ static void interruptf(void) __interrupt 0 {
         RB_GATE=0;
         //TMR2ON=0;  should present
         TMR1ON=0;
-        rs_send("Tout");
+        rs_send("READY");
         RB_READY=1;
       }
     }
