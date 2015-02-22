@@ -41,8 +41,8 @@ _CP_OFF;
 char uartRXi=0;
 char uartTXi=0;
 char uartTXlen=0;
-char uartRXbuf[27];
-char uartTXbuf[27];
+char uartRXbuf[24];
+char uartTXbuf[24];
 char tmpstr[8];
 unsigned int tmpint;
 
@@ -86,18 +86,20 @@ void wait(){/*{{{*/
   __asm__("nop");
 }/*}}}*/
 void run(){/*{{{*/
-  RB_READY=0;
+  if(RB_READY){
+    RB_READY=0;
 
-  TMR0IE=0; //disable TMR0
+    TMR0IE=0; //disable TMR0
 
-  TMR1H=TMR1L=0;  // clear counters
-  t1postscale_i=0;
-  TMR1ON=1;
+    TMR1H=TMR1L=0;  // clear counters
+    t1postscale_i=0;
+    TMR1ON=1;
 
-  TMR2=(impOffset==0?PR2-1:0); // if 0ms offset, make tmr2 to finish immediately
-  TMR2ON=1;
+    TMR2=(impOffset==0?PR2-1:0); // if 0ms offset, make tmr2 to finish immediately
+    TMR2ON=1;
 
-  RB_GATE=1;
+    RB_GATE=1;
+  }
 }/*}}}*/
 
 void main(void){
@@ -163,6 +165,9 @@ void main(void){
   rs_send("\nPic Led Driver\n");
   TXIE=1;
   /*}}}*/
+
+  TMR1ON=1;
+
   while(1){ }
 }
 
