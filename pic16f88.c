@@ -328,7 +328,7 @@ static void interruptf(void) __interrupt 0 {
                 case '1':rs_send("Press ! to self trig"); break;
                 case '2':rs_send("Press @ to make ready"); break;
                 case '3':rs_send("Press # to make busy"); break;
-                case '5':rs_send("Press %% for Restart"); break;
+                case '5':rs_send("Press % for Restart"); break;
                 default:
                          rs_send("[h?][nmtgo1235]");
               }
