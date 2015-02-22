@@ -8,12 +8,12 @@
 
 #define RB_TRIG  RB0
 #define RB_READY RB1
-#define RB_WRAP  RB3
-#define RB_GATE  RB7
+//#define RB_RX  RB2
+#define RB_BAUD  RB3
+#define RB_WRAP  RB6
 //#define RB_TX  RB5
 //#define RB_NWRAP RB7
-//#define RB_RX  RB2
-//#define RB_BAUD  RB3
+#define RB_GATE  RB4
 
 //           Blinking LED  ┐     ┌  Gate output
 //        Blinking LED  ┐  │     │  ┌  
@@ -133,7 +133,9 @@ void main(void){
   //int i=0;
   TRISA=0x0;
   TRISB=0x1;
+  ANSEL=0;
   PORTA=PORTB=0;
+
 
   OSCCON=0b01101110;       // Fosc 4MHz
   IOFS=0; while(IOFS!=1);  // wait for stable frequency
@@ -209,10 +211,10 @@ static void interruptf(void) __interrupt 0 {
   if(TMR0IF){
     TMR0IF=0;
     if(TMR0IE){
-      //RB_BAUD=1;
+      RB_BAUD=1;
       PORTA=portaMask;
       PORTA=0x0;
-      //RB_BAUD=0;
+      RB_BAUD=0;
       if((++nPeaks_i)>=nPeaks){
         TMR0IE=0;
         RB_WRAP=0;
