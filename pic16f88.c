@@ -65,13 +65,17 @@ void rs_send(char* data){/*{{{*/
   uartTXi=0;
   uartTXbuf[0]='\n';
   uartTXbuf[1]='\r';
-  strcpy(&(uartTXbuf[2]),data);
   uartTXlen=2+strlen(data);
-  uartTXbuf[uartTXlen++]='\n';
-  uartTXbuf[uartTXlen++]='\r';
-  uartTXbuf[uartTXlen++]='>';
-  uartTXlen++;
-  TXEN=1;
+  if(uartTXlen>25){
+    rs_send("err");
+  }else{
+    strcpy(&(uartTXbuf[2]),data);
+    uartTXbuf[uartTXlen++]='\n';
+    uartTXbuf[uartTXlen++]='\r';
+    uartTXbuf[uartTXlen++]='>';
+    uartTXlen++;
+    TXEN=1;
+  }
 }/*}}}*/
 void wait(){/*{{{*/
   __asm__("nop");
@@ -126,6 +130,7 @@ void main(void){
   SWDTEN=0; //disable watchdog
   WDTCON=0; // presc watchdog 1:32
   WDTCON=0b1000; // presc watchdog 1:512
+  WDTCON=0b1110; // presc watchdog
 
   /*}}}*/
   // Configure Timer 0/*{{{*/
@@ -169,6 +174,9 @@ void main(void){
   TXIE=1;
   /*}}}*/
 
+  // delay before ready
+  TMR1H=TMR1L=0;  // clear counters
+  t1postscale_i=0;
   TMR1ON=1;
 
 
@@ -329,11 +337,11 @@ static void interruptf(void) __interrupt 0 {
         }
         break;
       default:
-        uartRXbuf[uartRXi++]=tmp;
-        if(uartRXi>13){
-          rs_send("TooLongInstruct");
+        if(uartRXi>15){
+          rs_send("Too Long Instruction");
           uartRXi=0;
         }
+        uartRXbuf[uartRXi++]=tmp;
     }
     return;
   }
