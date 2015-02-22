@@ -15,6 +15,25 @@
 #define RB_NWRAP RB7
 #define RB_GATE  RB4
 
+//           Blinking LED  ┐     ┌  Gate output
+//        Blinking LED  ┐  │     │  ┌  
+//     Blinking LED  ┐  │  │     │  │  ┌  TX RS232
+//   Blinking LED ┐  │  │  │  +  │  │  │  ┌  
+//                ↑  ↑  ↑  ↑     ↑  ↑  ↑  ↑
+//              ┌─┴──┴──┴──┴──┴──┴──┴──┴──┴─┐
+//              │ 1  0  7  6  P  7  6  5  4 │
+//              │                           │
+//              │    PORTA    S    PORTB    │
+//              │             U             │
+//              │ 2  3  4  5  P  0  1  2  3 │
+//              └─┬──┬──┬──┬──┬──┬──┬──┬──┬─┘
+//                ↓  ↓  ↓  ↑     ↑  ↓  ↑  ↓
+//  Blinking LED  ┘  │  │  │  -  │  │  │  └  
+//     Blinking LED  ┘  │  │     │  │  └  RX RS232
+//        Blinking LED  ┘  │     │  └  READY
+//               not used  ┘     └  Trigger input
+
+
 
 // On trigger signal Timer1 and Timer2 are started
 // simultaneously.
@@ -25,8 +44,7 @@
 // If Timer1 finish before Timer0 or Timer1 it switches off
 // everything.
 //
-// External triggers are accepted on RB0.
-
+// External triggers are accepted on RB0.  
 
 
 typedef unsigned int config;
@@ -132,6 +150,8 @@ void main(void){
   WDTCON=0b1000; // presc watchdog 1:512
   WDTCON=0b1110; // presc watchdog
 
+uartRXi=uartTXi=uartTXlen=uartRXbuf[0]=uartTXbuf[0]=uartRXbuf[1]=uartTXbuf[1]=0;
+
   /*}}}*/
   // Configure Timer 0/*{{{*/
 
@@ -189,10 +209,6 @@ static void interruptf(void) __interrupt 0 {
   if(TMR0IF){
     TMR0IF=0;
     if(TMR0IE){
-      RB_WRAP=1;
-
-
-
       RB_BAUD=1;
       PORTA=portaMask;
       PORTA=0x0;
@@ -200,7 +216,7 @@ static void interruptf(void) __interrupt 0 {
       if((++nPeaks_i)>=nPeaks){
         TMR0IE=0;
         RB_WRAP=0;
-        RB_NWRAP=1;
+        //RB_NWRAP=1;
       }
     }
   }
@@ -227,7 +243,7 @@ static void interruptf(void) __interrupt 0 {
       RB_WRAP=1;  // this should be in the if
       TMR2ON=0;
       nPeaks_i=0;
-      RB_NWRAP=0;
+      //RB_NWRAP=0;
       TMR0=125; // impulses in the middle of the wrap
       TMR0IE=1;
     }
@@ -238,7 +254,9 @@ static void interruptf(void) __interrupt 0 {
     INT0IF=0;
     if(RB_TRIG==1){
       if(run())
-        rs_send("Ext T");
+        rs_send("Ext Trig");
+      else
+        rs_send("BUSY: Ign ETrig");
     }
   }
   /*}}}*/
@@ -258,18 +276,20 @@ static void interruptf(void) __interrupt 0 {
       case '@': //make ready
         uartRXbuf[uartRXi=0]=0;
         RB_READY=1;
-        rs_send("READY");
+        rs_send("Get READY");
         break;
-      case '#': //make busy
+      case '#':case '': //make busy
         uartRXbuf[uartRXi=0]=0;
         TMR1ON=0;
         RB_READY=0;
-        rs_send("BUSY");
+        rs_send("Stay BUSY");
         break;
       case '!': //SW Trigger
         uartRXbuf[uartRXi=0]=0;
         if(run())
           rs_send("Soft Trig");
+        else
+          rs_send("BUSY: Ign STrig");
         break;
       case '\r': case '\n':
         if(uartRXi>0){
