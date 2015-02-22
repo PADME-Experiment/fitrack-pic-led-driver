@@ -35,16 +35,15 @@
 
 
 
-// On trigger signal Timer1 and Timer2 are started
-// simultaneously.
-// Timer2, when finish, starts Timer0.
-// Timer0 is the one responsible of the PORTA pins
-// toggleing.
-// Timer0 makes nPeaks spikes on PORTA.
-// If Timer1 finish before Timer0 or Timer1 it switches off
-// everything.
-//
-// External triggers are accepted on RB0.  
+/*
+   run()    timer1=ON, timer2=ON
+   timer1   gate=OFF, READY=ON
+   timer2   timer2=OFF, timer0=ON
+   timer0   toggle led outputs
+            if (n_i>N) timer0=OFF
+*/
+
+
 
 
 typedef unsigned int config;
@@ -152,7 +151,7 @@ void main(void){
   WDTCON=0b1000; // presc watchdog 1:512
   WDTCON=0b1110; // presc watchdog
 
-uartRXi=uartTXi=uartTXlen=uartRXbuf[0]=uartTXbuf[0]=uartRXbuf[1]=uartTXbuf[1]=0;
+  uartRXi=uartTXi=uartTXlen=uartRXbuf[0]=uartTXbuf[0]=uartRXbuf[1]=uartTXbuf[1]=0;
 
   /*}}}*/
   // Configure Timer 0/*{{{*/
