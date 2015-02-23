@@ -400,8 +400,6 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   // AUSART Transmit }}}
-
-
   // IRQ External Trigger RB0/*{{{*/
   if(INT0IF){
     INT0IF=0;
