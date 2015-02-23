@@ -2,8 +2,17 @@
 #include<pic14/pic16f88.h>
 #include<string.h>
 #include<stdlib.h>
-//strcpy & strlen
-//atoi & itoa
+
+
+typedef unsigned int config;
+config __at _CONFIG1 gCONFIG1 =
+_LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
+_INTRC_IO &
+//_INTRC_CLKOUT &
+_MCLR_OFF &
+_WDT_OFF  &
+_CP_OFF;
+
 
 
 #define RB_TRIG  RB0
@@ -15,6 +24,8 @@
 //#define RB_TX  RB5
 //#define RB_NWRAP RB7
 #define RB_GATE  RB7
+
+
 
 
 //           Blinking LED  ┐     ┌  Gate output
@@ -37,25 +48,11 @@
 
 
 
-/*
-   run()    timer1=ON, timer2=ON
-   timer1   gate=OFF, READY=ON
-   timer2   timer2=OFF, timer0=ON
-   timer0   toggle led outputs
-            if (n_i>N) timer0=OFF
-*/
-
-
-
-
-typedef unsigned int config;
-config __at _CONFIG1 gCONFIG1 =
-_LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
-_INTRC_IO & 
-//_INTRC_CLKOUT & 
-_MCLR_OFF &
-_WDT_OFF  &
-_CP_OFF;
+//   run()    timer1=ON, timer2=ON
+//   timer1   gate=OFF, READY=ON
+//   timer2   timer2=OFF, timer0=ON
+//   timer0   toggle led outputs
+//            if (n_i>N) timer0=OFF
 
 
 char uartRXi=0;
@@ -147,7 +144,7 @@ void main(void){
 
 
   // Interrupts setting
-  INTCON=0b11100000;
+  INTCON=0b01100000;  // GIE=OFF
   //       76543210
   PIE1=0b0110011;
   //     6543210
@@ -172,10 +169,10 @@ void main(void){
   // Configure Timer 0/*{{{*/
 
   INT0IE=1;  // enable interrupts on RB0 Trigger input
-  PSA=0; // prescaler is assigned to the Timer0
-  OPTION_REGbits.PS=impint;
 
-  T0CS=0; //TMR0 Internal instruction cycle
+  OPTION_REG=0b01000000;
+  //           76543210
+  OPTION_REGbits.PS=impint;
 
   /*}}}*/
   // Configure Timer 1/*{{{*/
@@ -193,6 +190,10 @@ void main(void){
   T2CON&=0b111;T2CON|=impOffset*0b1000; // preserves last 3 bits and changes first four
   PR2=250; // t2 period
   /*}}}*/
+
+  GIE=1;  //enable global interrupts
+
+
   // Configure RS232/*{{{*/
   SYNC=0;
   SPEN=1;
@@ -265,17 +266,6 @@ static void interruptf(void) __interrupt 0 {
       //RB_NWRAP=0;
       TMR0=125; // impulses in the middle of the wrap
       TMR0IE=1;
-    }
-  }
-  /*}}}*/
-  // IRQ External Trigger RB0/*{{{*/
-  if(INT0IF){
-    INT0IF=0;
-    if(RB_TRIG==1){
-      if(run())
-        rs_send("Ext Trig");
-      else
-        rs_send("BUSY: Ign ETrig");
     }
   }
   /*}}}*/
@@ -410,4 +400,17 @@ static void interruptf(void) __interrupt 0 {
     return;
   }
   // AUSART Transmit }}}
+
+
+  // IRQ External Trigger RB0/*{{{*/
+  if(INT0IF){
+    INT0IF=0;
+    if(RB_TRIG==1){
+      if(run())
+        rs_send("Ext Trig");
+      else
+        rs_send("BUSY: Ign ETrig");
+    }
+  }
+  /*}}}*/
 }
