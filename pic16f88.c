@@ -94,18 +94,11 @@ void rs_send(char* data){/*{{{*/
     TXEN=1;
   }
 }/*}}}*/
-void wait(){/*{{{*/
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
-  __asm__("nop");
+void wait(){//16 nop /*{{{*/
+  __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
+  __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
+  __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
+  __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
 }/*}}}*/
 char run(){/*{{{*/
   if(RB_READY){
@@ -125,6 +118,7 @@ char run(){/*{{{*/
   }
   return 0;
 }/*}}}*/
+char isFirstT1Call;
 
 void main(void){
   // Global configuration/*{{{*/
@@ -146,7 +140,8 @@ void main(void){
   // Interrupts setting
   INTCON=0b01100000;  // GIE=OFF
   //       76543210
-  PIE1=0b0110011;
+  //      76543210
+  PIE1=0b0100011;
   //     6543210
 
   // watchdog
@@ -159,7 +154,7 @@ void main(void){
   uartRXi=uartTXi=uartTXlen=uartRXbuf[0]=uartTXbuf[0]=uartRXbuf[1]=uartTXbuf[1]=0;
 
   nPeaks=10;
-  portaMask==0b11011111;
+  portaMask=0b11011111;
   t1postscale=4; // ~1 s
   impOffset=3;
   impint=2;
@@ -189,43 +184,50 @@ void main(void){
   T2CON=0b00000001; // t2 is off, postscale 1:1, prescale 1:4
   T2CON&=0b111;T2CON|=impOffset*0b1000; // preserves last 3 bits and changes first four
   PR2=250; // t2 period
+  TMR2ON=0;
   /*}}}*/
-
-  GIE=1;  //enable global interrupts
 
 
   // Configure RS232/*{{{*/
+  RCIE=1;  // RX IRQ
   SYNC=0;
   SPEN=1;
   TRISB2=TRISB5=1;
   CREN=1; //reception is enabled
 
-  TXSTA=0b10000110;
+  TXSTA=0b10000100;  // shift register status bit is off
+  //      76543210
   RCSTA=0b10010000;
+  //      76543210
 
   // 9k6 bps is not stable
   //SPBRG=25;  //9600
   SPBRG=207; //1200
+  // 0xFF nop
+  wait();wait(); wait();wait();
+  wait();wait(); wait();wait();
+  wait();wait(); wait();wait();
+  wait();wait(); wait();wait();
+
+  GIE=1;  //enable global interrupts
 
   rs_send("\nPic Led Driver\n");
   TXIE=1;
+  while(TXEN);
   /*}}}*/
-
-
-  // delay before ready
-  TMR1H=TMR1L=0;  // clear counters
-  t1postscale_i=0;
-  TMR1ON=1;
-
-
 
   RB_READY_soft=0;
   RB_READY=1;
 
+  // delay before ready
+  isFirstT1Call=1;
+
+  TMR1H=TMR1L=0;  // clear counters
+  t1postscale_i=0;
+  TMR1ON=1;
 
   while(1){ }
 }
-
 
 static void interruptf(void) __interrupt 0 {
   // IRQ Timer 0/*{{{*/
@@ -254,7 +256,9 @@ static void interruptf(void) __interrupt 0 {
         //TMR2ON=0;  should present
         TMR1ON=0;
         rs_send("READY");
-        RB_READY=RB_READY_soft=1;
+        RB_READY=1;
+        RB_READY_soft=(!isFirstT1Call);
+        isFirstT1Call=0;
       }
     }
   }
@@ -273,7 +277,7 @@ static void interruptf(void) __interrupt 0 {
   }
   /*}}}*/
   // IRQ AUSART Receive {{{
-  if(RCIF){
+  if(RCIF&&RCIE){
     char tmp;
     tmp=RCREG;
     rs_char(tmp);
@@ -281,115 +285,116 @@ static void interruptf(void) __interrupt 0 {
       case '': case '': //backspace
         uartRXi-=(uartRXi>0?1:0);
         break;
-      case '%': //restart
+      case '%':case '': //restart
+        GIE=0;
         uartRXbuf[uartRXi=0]=0;
         SWDTEN=1; //enable watchdog
         break;
-      case '@': //make ready
-        uartRXbuf[uartRXi=0]=0;
-        RB_READY=RB_READY_soft=1;
-        rs_send("Get READY");
-        break;
+      case '@':case '': //make ready
+               uartRXbuf[uartRXi=0]=0;
+               RB_READY=RB_READY_soft=1;
+               rs_send("Get READY");
+               break;
       case '#':case '': //make busy
-        uartRXbuf[uartRXi=0]=0;
-        TMR1ON=0;
-        RB_READY=RB_READY_soft=0;
-        rs_send("Stay BUSY");
-        break;
-      case '!': //SW Trigger
-        uartRXbuf[uartRXi=0]=0;
-        if(run())
-          rs_send("Soft Trig");
-        else
-          rs_send("BUSY: Ign STrig");
-        break;
+               uartRXbuf[uartRXi=0]=0;
+               TMR1ON=0;
+               RB_READY=RB_READY_soft=0;
+               rs_send("Stay BUSY");
+               break;
+      case '!':case '	': //SW Trigger
+               uartRXbuf[uartRXi=0]=0;
+               if(run())
+                 rs_send("Soft Trig");
+               else
+                 rs_send("BUSY: Ign STrig");
+               break;
       case '\r': case '\n':
-        if(uartRXi>0){
-          uartRXbuf[uartRXi]=0;
-          switch (uartRXbuf[0]){
-            case '\r':
-              rs_send("");
-              break;
+               if(uartRXi>0){
+                 uartRXbuf[uartRXi]=0;
+                 switch (uartRXbuf[0]){
+                   case '\r':
+                     rs_send("");
+                     break;
 
-            case '\n':
-              rs_send("main nn\r\n");
-              break;
+                   case '\n':
+                     rs_send("main nn\r\n");
+                     break;
 
-            case 'n':
-              if(uartRXi>1)nPeaks=atoi(&(uartRXbuf[1]));
-              _itoa(nPeaks,tmpstr,10);
-              rs_send(tmpstr);
-              break;
+                   case 'n':
+                     if(uartRXi>1)nPeaks=atoi(&(uartRXbuf[1]));
+                     _itoa(nPeaks,tmpstr,10);
+                     rs_send(tmpstr);
+                     break;
 
-            case 'm': // PORTA mask
-              if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b11011111; // RA5 is allways input
-              _itoa(portaMask,tmpstr,2);
-              rs_send(tmpstr);
-              break;
+                   case 'm': // PORTA mask
+                     if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b11011111; // RA5 is allways input
+                     _itoa(portaMask,tmpstr,2);
+                     rs_send(tmpstr);
+                     break;
 
-            case 't': //impulse interval
-              if(uartRXi>1)impint=(atoi(&(uartRXbuf[1]))&0b111);
-              _itoa(64<<impint,tmpstr,10);
-              OPTION_REGbits.PS=impint;
-              rs_send(tmpstr);
-              break;
+                   case 't': //impulse interval
+                     if(uartRXi>1)impint=(atoi(&(uartRXbuf[1]))&0b111);
+                     _itoa(64<<impint,tmpstr,10);
+                     OPTION_REGbits.PS=impint;
+                     rs_send(tmpstr);
+                     break;
 
-            case 'g': //Gate
-              if(uartRXi>1)t1postscale=atoi(&(uartRXbuf[1]));
-              _itoa(t1postscale>>2,tmpstr,10);
-              rs_send(tmpstr);
-              break;
+                   case 'g': //Gate
+                     if(uartRXi>1)t1postscale=atoi(&(uartRXbuf[1]));
+                     _itoa(t1postscale>>2,tmpstr,10);
+                     rs_send(tmpstr);
+                     break;
 
-            case 'o': //offset for the imp
-              if(uartRXi>1){
-                impOffset=atoi(&(uartRXbuf[1]));
-                if(impOffset>16)impOffset=16;
-              }
-              _itoa(impOffset,tmpstr,10);
-              T2CON&=0b111;T2CON|=(impOffset>0?impOffset-1:impOffset)*0b1000; // preserves last 3 bits and changes first four
-              rs_send(tmpstr);
-              break;
+                   case 'o': //offset for the imp
+                     if(uartRXi>1){
+                       impOffset=atoi(&(uartRXbuf[1]));
+                       if(impOffset>16)impOffset=16;
+                     }
+                     _itoa(impOffset,tmpstr,10);
+                     T2CON&=0b111;T2CON|=(impOffset>0?impOffset-1:impOffset)*0b1000; // preserves last 3 bits and changes first four
+                     rs_send(tmpstr);
+                     break;
 
-            case 'l':  // for ls
-              rs_send("not Linux!\n\rh for help");
-              break;
+                   case 'l':  // for ls
+                     rs_send("not Linux!\n\rh for help");
+                     break;
 
-            case '?': case 'h': //help
-              switch (uartRXbuf[1]){
-                case 'n':rs_send("num imp [0-32760]"); break;
-                case 'm':rs_send("porta mask [0-F]"); break;
-                case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
-                case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
-                case 'o':rs_send("offs (#)ms [0-16]"); break;
-                case '1':rs_send("Press ! to self trig"); break;
-                case '2':rs_send("Press @ to make ready"); break;
-                case '3':rs_send("Press # to make busy"); break;
-                case '5':rs_send("Press % for Restart"); break;
-                default:
-                         rs_send("[h?][nmtgo1235]");
-              }
-              break;
+                   case '?': case 'h': //help
+                     switch (uartRXbuf[1]){
+                       case 'n':rs_send("num imp [0-32760]"); break;
+                       case 'm':rs_send("porta mask [0-F]"); break;
+                       case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
+                       case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
+                       case 'o':rs_send("offs (#)ms [0-16]"); break;
+                       case '1':rs_send("Press !,^I to self trig"); break;
+                       case '2':rs_send("Press @,^F to make ready"); break;
+                       case '3':rs_send("Press #,^C to make busy"); break;
+                       case '5':rs_send("Press %,^R for Restart"); break;
+                       default:
+                                rs_send("[h?][nmtgo1235]");
+                     }
+                     break;
 
-            default:
-              rs_send("N/A cmd");
-          }
-          uartRXi=0;
-        }else{
-          rs_send("");
-        }
-        break;
+                   default:
+                     rs_send("N/A cmd");
+                 }
+                 uartRXi=0;
+               }else{
+                 rs_send("");
+               }
+               break;
       default:
-        if(uartRXi>15){
-          rs_send("Too Long Instruction");
-          uartRXi=0;
-        }
-        uartRXbuf[uartRXi++]=tmp;
+               if(uartRXi>15){
+                 rs_send("Too Long Instruction");
+                 uartRXi=0;
+               }
+               uartRXbuf[uartRXi++]=tmp;
     }
     return;
   }
   //AUSART Receive }}}
   // IRQ AUSART Transmit {{{
-  if(TXIF){
+  if(TXIF&&TXEN){
     if(uartTXlen>0){
       if(uartTXi<uartTXlen){
         TXREG=uartTXbuf[uartTXi++];
