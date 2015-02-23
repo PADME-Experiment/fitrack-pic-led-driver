@@ -58,8 +58,8 @@ _CP_OFF;
 char uartRXi=0;
 char uartTXi=0;
 char uartTXlen=0;
-char uartRXbuf[30];
-char uartTXbuf[30];
+char uartRXbuf[33];
+char uartTXbuf[33];
 char tmpstr[8];
 unsigned int tmpint;
 
@@ -212,10 +212,13 @@ void main(void){
   /*}}}*/
 
 
-  // // delay before ready
-  // TMR1H=TMR1L=0;  // clear counters
-  // t1postscale_i=0;
-  // TMR1ON=1;
+  // delay before ready
+  TMR1H=TMR1L=0;  // clear counters
+  t1postscale_i=0;
+  TMR1ON=1;
+
+
+
   RB_READY_soft=0;
   RB_READY=1;
 
