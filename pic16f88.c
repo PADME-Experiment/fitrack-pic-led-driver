@@ -143,8 +143,9 @@ void main(void){
   //      76543210
   PIE1=0b0100011;
   //     6543210
-  PIE2=0;
-  PIE2bits.OSFIE=0;
+
+  //  PIE2
+  OSFIE=CMIE=EEIE=0;
 
   // watchdog
   SWDTEN=0; //disable watchdog
