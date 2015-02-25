@@ -59,3 +59,12 @@ $(HEXFILES):%.hex : %.c $(OBJLIBFILES)
 
 up: pic16f88.hex
 	pk2cmd -P -M -F$<
+
+upX: pic16f88.hex
+	pk2cmd -P PIC16F88 -X -M -F$<
+
+upXE: pic16f88.hex
+	pk2cmd -P PIC16F88 -X -E
+
+down: pic16f88.hex
+	pk2cmd -P -M -F$<
