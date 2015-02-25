@@ -7,6 +7,7 @@
 typedef unsigned int config;
 config __at _CONFIG1 gCONFIG1 =
 _LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
+_BODEN_OFF  &
 _INTRC_IO &
 //_INTRC_CLKOUT &
 _MCLR_OFF &
@@ -123,6 +124,7 @@ void main(void){
   INTCON=0;  // GIE=0;
 
   OSCCON=0b01101110;       // Fosc 4MHz
+  OSCTUNE=0;
 
   // watchdog
   SWDTEN=0; //disable watchdog
@@ -175,7 +177,7 @@ void main(void){
   T1RUN=0;
   T1CONbits.T1CKPS=2; // T1 Clock Prescale 1:4
   T1OSCEN=0;
-  TMR11CS=0;
+  TMR1CS=0;
   TMR1H=TMR1L=0;  // clear counters
   /*}}}*/
   // Configure Timer 2/*{{{*/
@@ -265,8 +267,8 @@ static void interruptf(void) __interrupt 0 {
     TMR1IF=0;
     if((++t1postscale_i)>t1postscale){
       TMR0IE=0; //disable TMR0
-      TMR2ON=0;  should present
-        TMR1ON=0;
+      TMR2ON=0;  //should present
+      TMR1ON=0;
       RB_GATE=0;
       rs_send("READY");
       while(TXEN);
