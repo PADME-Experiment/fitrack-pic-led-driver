@@ -62,7 +62,8 @@ char uartTXi=0;
 char uartTXlen=0;
 char uartRXbuf[33];
 char uartTXbuf[33];
-char tmpstr[8];
+char tmpstr[10];
+char echo;
 unsigned int tmpint;
 
 unsigned int nPeaks_i;
@@ -81,6 +82,7 @@ void rs_char(char data){/*{{{*/
   TXEN=1;
 }/*}}}*/
 void rs_send(char* data){/*{{{*/
+  //if(!echo)return;
   uartTXi=0;
   uartTXbuf[0]='\n';
   uartTXbuf[1]='\r';
@@ -95,7 +97,7 @@ void rs_send(char* data){/*{{{*/
   uartTXbuf[uartTXlen++]='>';
   uartTXlen++;
   TXEN=1;
-  while(TXEN);
+  //while(TXEN);
 }/*}}}*/
 void wait(){//16 nop /*{{{*/
   __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
@@ -219,11 +221,12 @@ void main(void){
   wait();wait(); wait();wait();
   wait();wait(); wait();wait();
   wait();wait(); wait();wait();
+  echo=1;
 
   TXIE=1;
   GIE=1;  //enable global interrupts
   rs_send("\nPic Led Driver\n");
-  while(TXEN);
+  //while(TXEN);
   GIE=0;
   /*}}}*/
 
@@ -252,7 +255,6 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 0/*{{{*/
   if(TMR0IE&&TMR0IF){
     TMR0IF=0;
-
     //RB_BAUD=1;
     //PORTA=portaMask;
     //PORTA=0x0;
@@ -286,9 +288,11 @@ static void interruptf(void) __interrupt 0 {
       TMR0IE=0; //disable TMR0
       TMR2ON=0;  //should present
       TMR1ON=0;
-      RB_GATE=0;
-      rs_send("READY");
-      while(TXEN);
+      RB_WRAP=
+        RB_BAUD=
+        RB_GATE=0;
+      if(echo)rs_send("READY");
+      //while(TXEN);
       RB_READY_soft=RB_READY=1;
     }
   }
@@ -300,7 +304,7 @@ static void interruptf(void) __interrupt 0 {
     TMR2ON=0;
     nPeaks_i=0;
     //RB_NWRAP=0;
-    TMR0=125; // impulses in the middle of the wrap
+    TMR0=0; // impulses in the middle of the wrap
     TMR0IE=1;
   }
   /*}}}*/
@@ -325,6 +329,8 @@ static void interruptf(void) __interrupt 0 {
     tmp=RCREG;
     rs_char(tmp);
     switch (tmp){
+      case '': //clear screen
+        break;
       case '': case '': //backspace
         uartRXi-=(uartRXi>0?1:0);
         break;
@@ -335,7 +341,7 @@ static void interruptf(void) __interrupt 0 {
       case '@':case '': //make ready
         uartRXbuf[uartRXi=0]=0;
         rs_send("Get READY");
-        while(TXEN);
+        //while(TXEN);
         RB_READY=RB_READY_soft=1;
         break;
       case '#':case '': //make busy
@@ -343,7 +349,7 @@ static void interruptf(void) __interrupt 0 {
         TMR1ON=0;
         RB_READY=RB_READY_soft=0;
         rs_send("Stay BUSY");
-        while(TXEN);
+        //while(TXEN);
         break;
       case '!':case '	': //SW Trigger
         uartRXbuf[uartRXi=0]=0;
@@ -362,6 +368,12 @@ static void interruptf(void) __interrupt 0 {
 
             case '\n':
               rs_send("main nn\r\n");
+              break;
+
+            case 'e':  //echo
+              if(uartRXi>1)echo=(atoi(&(uartRXbuf[1]))!=0);
+              _itoa(echo,tmpstr,10);
+              rs_send(tmpstr);
               break;
 
             case 'n':
@@ -394,7 +406,7 @@ static void interruptf(void) __interrupt 0 {
                 impOffset=atoi(&(uartRXbuf[1]));
                 if(impOffset>16)impOffset=16;
               }
-              _itoa(impOffset,tmpstr,10);
+              _itoa(impOffset*4,tmpstr,10);
               T2CON&=0b111;T2CON|=(impOffset>0?impOffset-1:impOffset)*0b1000; // preserves last 3 bits and changes first four
               rs_send(tmpstr);
               break;
@@ -410,6 +422,7 @@ static void interruptf(void) __interrupt 0 {
                 case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
                 case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
                 case 'o':rs_send("offs (#*4)ms [0-16]"); break;
+                case 'e':rs_send("echo on/off");break;
                 case '1':rs_send("Press !,^I to self trig"); break;
                 case '2':rs_send("Press @,^F to make ready"); break;
                 case '3':rs_send("Press #,^C to make busy"); break;
@@ -442,9 +455,9 @@ static void interruptf(void) __interrupt 0 {
     INT0IF=0;
     if(RB_TRIG==1){
       if(run())
-        rs_send("Ext Trig");
+        if(echo)rs_send("Ext Trig");
       else
-        rs_send("BUSY: Ign ETrig");
+        if(echo)rs_send("BUSY: Ign ETrig");
     }
   }
   /*}}}*/
