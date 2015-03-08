@@ -21,6 +21,7 @@ _CP_OFF;
 #define RB_READY RB6
 //#define RB_RX  RB2
 #define RB_BAUD  RB3
+#define RB_BAUD_bitfiled _PORTBbits,3
 #define RB_WRAP  RB4
 //#define RB_TX  RB5
 //#define RB_NWRAP RB7
@@ -251,10 +252,26 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 0/*{{{*/
   if(TMR0IE&&TMR0IF){
     TMR0IF=0;
-    RB_BAUD=1;
-    PORTA=portaMask;
-    PORTA=0x0;
-    RB_BAUD=0;
+
+    //RB_BAUD=1;
+    //PORTA=portaMask;
+    //PORTA=0x0;
+    //RB_BAUD=0;
+    __asm
+    ; W = portaMask
+    BANKSEL	_portaMask
+    MOVF	_portaMask,W
+    BANKSEL	_PORTA
+    ;RB_BAUD=1
+    BSF	RB_BAUD_bitfiled
+    ; PORTA = W
+    MOVWF	_PORTA
+    ;     PORTA=0x0;
+    CLRF	_PORTA
+    ;     RB_BAUD=0;
+    BCF	RB_BAUD_bitfiled
+    __endasm;
+
     if((++nPeaks_i)>=nPeaks){
       TMR0IE=0;
       RB_WRAP=0;

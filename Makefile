@@ -1,4 +1,4 @@
-.PHONY: all clean up
+.PHONY: all clean up prep
 .IGNORE: clean
 
 .DEFAULT_GOAL:=all
@@ -6,7 +6,7 @@
 
 PK2CMDINSTALLDIR=$(HOME)/Downloads/pk2cmdv1-20Linux2-6
 SDCCINSTALLDIR=$(HOME)/.opt/sdcc/svn
-SRCLIBDIR=$(HOME)/sdcc/device/lib
+SRCLIBDIR=$(SDCCINSTALLDIR)/share/sdcc/lib/src/
 HEXFILES=pic16f88.hex
 OBJLIBFILES=_atoi.o _strcpy.o _strlen.o _itoa.o
 
@@ -16,7 +16,7 @@ SDCFLAGS=--use-non-free -mpic14 -p16f88
 
 
 
-DISABLEFLAGS=--nooverlay --nogcse --nolabelopt --noinvariant --noinduction --nojtbound --noloopreverse
+DISABLEFLAGS=--nooverlay --nogcse --nolabelopt --noinvariant --noinduction --nojtbound --noloopreverse         --no-peep-return --no-peep --opt-code-speed
 
 #    --nooverlay          # Disable overlaying leaf function auto variables
 #    --nogcse             # Disable the GCSE optimisation
@@ -49,6 +49,9 @@ all:$(HEXFILES)
 
 clean:
 	rm *.asm *.cod *.hex *.lst *.o
+
+prep:
+	$(SDCC) $(SDCFLAGS) -E pic16f88.c
 
 $(OBJLIBFILES): %.o: $(SRCLIBDIR)/%.c
 	$(SDCC) $(SDCFLAGS) -c $< -o $@
