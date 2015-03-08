@@ -8,8 +8,12 @@ typedef unsigned int config;
 config __at _CONFIG1 gCONFIG1 =
 _LVP_OFF &  // RB3 is digital I/O, HV on MCLR must be used for programming.
 _BODEN_OFF  &
-_INTRC_IO &
+
+//_INTRC_IO &
 //_INTRC_CLKOUT &
+//_FOSC_HS &
+_FOSC_XT &
+
 _MCLR_OFF &
 _WDT_OFF  &
 _CP_OFF;
@@ -126,7 +130,14 @@ void main(void){
   // Global configuration/*{{{*/
   INTCON=0;  // GIE=0;
 
-  OSCCON=0b01101110;       // Fosc 4MHz
+  //OSCCON=0b01101110;       // Fosc 4MHz
+  OSCCONbits.IRCF=0b110; // 4MHz
+  OSTS=1; // freq is stable
+  //OSCCONbits.SCS=0b10; // internal rc
+  OSCCONbits.SCS=0b00; // defined by FOSC
+
+
+
   OSCTUNE=0;
 
   // watchdog
