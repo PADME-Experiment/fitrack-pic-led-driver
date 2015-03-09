@@ -11,8 +11,8 @@ _BODEN_OFF  &
 
 //_INTRC_IO &
 //_INTRC_CLKOUT &
-//_FOSC_HS &
-_FOSC_XT &
+_FOSC_HS &
+//_FOSC_XT &
 
 _MCLR_OFF &
 _WDT_OFF  &
@@ -146,7 +146,7 @@ void main(void){
   //WDTCON=0b1000; // presc watchdog 1:512
   WDTCON=0b1110; // presc watchdog
 
-  IOFS=0; while(IOFS!=1);  // wait for stable frequency
+  //IOFS=0; while(IOFS!=1);  // wait for stable frequency
 
   TRISA=TRISB=0x0;
   ANSEL=0;
@@ -412,6 +412,19 @@ static void interruptf(void) __interrupt 0 {
               rs_send(tmpstr);
               break;
 
+            case 'X': //Crystal
+              if(uartRXi>1){
+                OSCCONbits.SCS=((atoi(&(uartRXbuf[1]))==0)<<1);
+                __asm__("nop");__asm__("nop");
+              }
+              if(OSTS)
+                rs_send("Xtal");
+              else
+                rs_send("IntOSC");
+              //_itoa(OSCCON,tmpstr,2);
+              //rs_send(tmpstr);
+              break;
+
             case 'o': //offset for the imp
               if(uartRXi>1){
                 impOffset=atoi(&(uartRXbuf[1]));
@@ -434,6 +447,7 @@ static void interruptf(void) __interrupt 0 {
                 case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
                 case 'o':rs_send("offs (#*4)ms [0-16]"); break;
                 case 'e':rs_send("echo on/off");break;
+                case 'X':rs_send("crystal on/off");break;
                 case '1':rs_send("Press !,^I to self trig"); break;
                 case '2':rs_send("Press @,^F to make ready"); break;
                 case '3':rs_send("Press #,^C to make busy"); break;
@@ -467,8 +481,8 @@ static void interruptf(void) __interrupt 0 {
     if(RB_TRIG==1){
       if(run())
         if(echo)rs_send("Ext Trig");
-      else
-        if(echo)rs_send("BUSY: Ign ETrig");
+        else
+          if(echo)rs_send("BUSY: Ign ETrig");
     }
   }
   /*}}}*/
