@@ -1,3 +1,11 @@
+.*.un~
+.*.swp
+*.asm
+*.lst
+*.c1
+*.cod
+
+
 # Object files
 *.o
 *.ko
