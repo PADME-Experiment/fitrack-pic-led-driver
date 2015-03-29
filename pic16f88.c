@@ -34,11 +34,11 @@ _CP_OFF;
 
 
 
-//           Blinking LED  ┐     ┌  Gate output
-//        Blinking LED  ┐  │     │  ┌  READY
+//                               ┌  Gate output
+//                      ┌Xt┐     │  ┌  READY
 //     Blinking LED  ┐  │  │     │  │  ┌  TX RS232
 //   Blinking LED ┐  │  │  │  +  │  │  │  ┌  Burst WRAP
-//                ↑  ↑  ↑  ↑     ↑  ↑  ↑  ↑
+//                ↑  ↑  ↕  ↕     ↑  ↑  ↑  ↑
 //              ┌─┴──┴──┴──┴──┴──┴──┴──┴──┴─┐
 //              │ 1  0  7  6  P  7  6  5  4 │
 //              │             w             │
@@ -46,10 +46,10 @@ _CP_OFF;
 //              │             u             │
 //              │ 2  3  4  5  p  0  1  2  3 │
 //              └─┬──┬──┬──┬──┬──┬──┬──┬──┬─┘
-//                ↓  ↓  ↓  ↑     ↑  ↓  ↑  ↓
+//                ↓  ↓  ↑  ↑     ↑  ↓  ↑  ↓
 //  Blinking LED  ┘  │  │  │  -  │  │  │  └  Baud
 //     Blinking LED  ┘  │  │     │  │  └  RX RS232
-//        Blinking LED  ┘  │     │  └  READY_soft
+//                 ADC  ┘  │     │  └  READY_soft
 //                    N/C  ┘     └  Trigger input
 
 
@@ -68,6 +68,7 @@ char uartRXbuf[33];
 char uartTXbuf[33];
 char tmpstr[10];
 char echo;
+char voltmeas_en;
 unsigned int tmpint;
 
 unsigned int nPeaks_i;
@@ -79,6 +80,19 @@ unsigned int t1postscale;
 unsigned char portaMask;
 unsigned char impOffset;
 unsigned char impint;
+
+typedef union{
+  unsigned int value;
+  struct{
+    unsigned int:8;
+    unsigned int H:8;
+  };
+  struct{
+    unsigned int L:8;
+  };
+} ad_result_t;
+
+ad_result_t voltage;
 
 void rs_char(char data){/*{{{*/
   uartTXlen=1;
@@ -125,6 +139,14 @@ char run(){/*{{{*/
 
   return 1;
 }/*}}}*/
+void voltmeas(){
+  ADON=1;
+  GO_NOT_DONE=1;
+  while(GO_NOT_DONE);
+  voltage.H=ADRESH;
+  voltage.L=ADRESL;
+  ADON=0;
+}
 
 void main(void){
   // Global configuration/*{{{*/
@@ -240,6 +262,23 @@ void main(void){
   //while(TXEN);
   GIE=0;
   /*}}}*/
+  // Configure A/D
+  TRISA4=1;
+  ANS4=1;
+  //ADCON0
+  ADCON0bits.ADCS=0b01; // Fosc/8
+  ADCON0bits.CHS=0b100; // AN4
+  GO_NOT_DONE=0;
+  ADON=0;
+
+  //ADCON1
+  ADFM=1;
+  ADCS2=0;
+  ADCON1bits.VCFG=0b00;
+
+  voltmeas_en=1;
+
+
 
 
   INTCON=PIE1=PIR1=PIE2=PIR2=0;
@@ -271,19 +310,19 @@ static void interruptf(void) __interrupt 0 {
     //PORTA=0x0;
     //RB_BAUD=0;
     __asm
-    ; W = portaMask
-    BANKSEL	_portaMask
-    MOVF	_portaMask,W
-    BANKSEL	_PORTA
-    ;RB_BAUD=1
-    BSF	RB_BAUD_bitfiled
-    ; PORTA = W
-    MOVWF	_PORTA
-    ;     PORTA=0x0;
+      ; W = portaMask
+      BANKSEL	_portaMask
+      MOVF	_portaMask,W
+      BANKSEL	_PORTA
+      ;RB_BAUD=1
+      BSF	RB_BAUD_bitfiled
+      ; PORTA = W
+      MOVWF	_PORTA
+      ;     PORTA=0x0;
     CLRF	_PORTA
-    ;     RB_BAUD=0;
+      ;     RB_BAUD=0;
     BCF	RB_BAUD_bitfiled
-    __endasm;
+      __endasm;
 
     if((++nPeaks_i)>=nPeaks){
       TMR0IE=0;
@@ -295,6 +334,11 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 1/*{{{*/
   if(TMR1ON&&TMR1IF){
     TMR1IF=0;
+    if(voltmeas_en){
+      voltmeas();
+      _itoa(voltage.value,tmpstr,10);
+      rs_send(tmpstr);
+    }
     if((++t1postscale_i)>t1postscale){
       TMR0IE=0; //disable TMR0
       TMR2ON=0;  //should present
@@ -412,6 +456,12 @@ static void interruptf(void) __interrupt 0 {
               rs_send(tmpstr);
               break;
 
+            case 'V': // Voltage measurement
+              if(uartRXi>1)voltmeas_en=(atoi(&(uartRXbuf[1]))!=0);
+              _itoa(voltmeas_en,tmpstr,10);
+              rs_send(tmpstr);
+              break;
+
             case 'X': //Crystal
               if(uartRXi>1){
                 OSCCONbits.SCS=((atoi(&(uartRXbuf[1]))==0)<<1);
@@ -421,8 +471,6 @@ static void interruptf(void) __interrupt 0 {
                 rs_send("Xtal");
               else
                 rs_send("IntOSC");
-              //_itoa(OSCCON,tmpstr,2);
-              //rs_send(tmpstr);
               break;
 
             case 'o': //offset for the imp
@@ -448,12 +496,13 @@ static void interruptf(void) __interrupt 0 {
                 case 'o':rs_send("offs (#*4)ms [0-16]"); break;
                 case 'e':rs_send("echo on/off");break;
                 case 'X':rs_send("crystal on/off");break;
+                case 'V':rs_send("Voltage meas on/off");break;
                 case '1':rs_send("Press !,^I to self trig"); break;
                 case '2':rs_send("Press @,^F to make ready"); break;
                 case '3':rs_send("Press #,^C to make busy"); break;
                 case '5':rs_send("Press %,^R for Restart"); break;
                 default:
-                         rs_send("[h?][nmtgo1235]");
+                         rs_send("[h?][nmtgoeXV1235]");
               }
               break;
 
