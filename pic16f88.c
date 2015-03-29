@@ -186,7 +186,7 @@ void main(void){
     uartTXbuf[1]=0;
 
   nPeaks=10;
-  portaMask=0b11011111;
+  portaMask=0b00001111;//=0b11011111;
   t1postscale=4; // ~1 s
   impOffset=3;
   impint=2;
@@ -438,7 +438,7 @@ static void interruptf(void) __interrupt 0 {
               break;
 
             case 'm': // PORTA mask
-              if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b11011111; // RA5 is allways input
+              if(uartRXi>1)portaMask=atoi(&(uartRXbuf[1]))&0b00001111; // RA5 is allways input, Osc, AN4
               _itoa(portaMask,tmpstr,2);
               rs_send(tmpstr);
               break;
