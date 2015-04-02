@@ -123,8 +123,22 @@ void wait(){//16 nop /*{{{*/
   __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
   __asm__("nop"); __asm__("nop"); __asm__("nop"); __asm__("nop");
 }/*}}}*/
+void voltmeas(){/*{{{*/
+  ADON=1;
+  GO_NOT_DONE=1;
+  while(GO_NOT_DONE);
+  voltage.H=ADRESH;
+  voltage.L=ADRESL;
+  ADON=0;
+}/*}}}*/
 char run(){/*{{{*/
   if(!RB_READY)return 0;
+  if(voltmeas_en){
+    voltmeas();
+    _itoa(voltage.value,tmpstr,10);
+    rs_send(tmpstr);
+    //while(TXEN);
+  }
   RB_READY=RB_READY_soft=0;
   RB_GATE=1;
 
@@ -139,14 +153,6 @@ char run(){/*{{{*/
 
   return 1;
 }/*}}}*/
-void voltmeas(){
-  ADON=1;
-  GO_NOT_DONE=1;
-  while(GO_NOT_DONE);
-  voltage.H=ADRESH;
-  voltage.L=ADRESL;
-  ADON=0;
-}
 
 void main(void){
   // Global configuration/*{{{*/
@@ -254,7 +260,7 @@ void main(void){
   wait();wait(); wait();wait();
   wait();wait(); wait();wait();
   wait();wait(); wait();wait();
-  echo=1;
+  echo=0;
 
   TXIE=1;
   GIE=1;  //enable global interrupts
@@ -262,7 +268,7 @@ void main(void){
   //while(TXEN);
   GIE=0;
   /*}}}*/
-  // Configure A/D
+  // Configure A/D/*{{{*/
   TRISA4=1;
   ANS4=1;
   //ADCON0
@@ -272,11 +278,23 @@ void main(void){
   ADON=0;
 
   //ADCON1
-  ADFM=1;
+  ADFM=1;  // Right justified
+  //ADFM=0;  // Left justified
   ADCS2=0;
-  ADCON1bits.VCFG=0b00;
+  ADCON1bits.VCFG=0b00; // Vref+ = Vdd, Vref- = Vss
+  //ADCON1bits.VCFG=0b11; // Vref+ = RA3, Vref- = RA2
+  //TRISA2=TRISA3=1; //inputs
 
-  voltmeas_en=1;
+  voltmeas_en=1;/*}}}*/
+  // Configure CVRM/*{{{*/
+  TRISA2=1;
+  ANS2=1;
+  CVROE=1; //CVref is output on the AN2
+  CVRR=0; // disables last 8R
+  CVRCONbits.CVR=0; // 0-15
+  CVREN=1;/*}}}*/
+
+
 
 
 
@@ -334,11 +352,6 @@ static void interruptf(void) __interrupt 0 {
   // IRQ Timer 1/*{{{*/
   if(TMR1ON&&TMR1IF){
     TMR1IF=0;
-    if(voltmeas_en){
-      voltmeas();
-      _itoa(voltage.value,tmpstr,10);
-      rs_send(tmpstr);
-    }
     if((++t1postscale_i)>t1postscale){
       TMR0IE=0; //disable TMR0
       TMR2ON=0;  //should present
@@ -417,13 +430,13 @@ static void interruptf(void) __interrupt 0 {
         if(uartRXi>0){
           uartRXbuf[uartRXi]=0;
           switch (uartRXbuf[0]){
-            case '\r':
-              rs_send("");
-              break;
+            //case '\r':
+            //  rs_send("");
+            //  break;
 
-            case '\n':
-              rs_send("main nn\r\n");
-              break;
+            //case '\n':
+            //  rs_send("main nn\r\n");
+            //  break;
 
             case 'e':  //echo
               if(uartRXi>1)echo=(atoi(&(uartRXbuf[1]))!=0);
@@ -462,6 +475,18 @@ static void interruptf(void) __interrupt 0 {
               rs_send(tmpstr);
               break;
 
+            case 'b':
+              if(uartRXi>1)CVRCONbits.CVR=(atoi(&(uartRXbuf[1]))&0b1111);
+              _itoa(CVRCONbits.CVR,tmpstr,2);
+              rs_send(tmpstr);
+              break;
+
+            case 'B':
+              if(uartRXi>1)CVRR=(atoi(&(uartRXbuf[1]))&0b1);
+              _itoa(CVRR,tmpstr,2);
+              rs_send(tmpstr);
+              break;
+
             case 'X': //Crystal
               if(uartRXi>1){
                 OSCCONbits.SCS=((atoi(&(uartRXbuf[1]))==0)<<1);
@@ -483,9 +508,9 @@ static void interruptf(void) __interrupt 0 {
               rs_send(tmpstr);
               break;
 
-            case 'l':  // for ls
-              rs_send("not Linux!\n\rh for help");
-              break;
+            //case 'l':  // for ls
+            //  rs_send("not Linux!\n\rh for help");
+            //  break;
 
             case '?': case 'h': //help
               switch (uartRXbuf[1]){
@@ -494,13 +519,15 @@ static void interruptf(void) __interrupt 0 {
                 case 't':rs_send("imp int (64*2^#)us [0-7]"); break;
                 case 'g':rs_send("gate ~(#/4)s [0-32768]"); break;
                 case 'o':rs_send("offs (#*4)ms [0-16]"); break;
-                case 'e':rs_send("echo on/off");break;
-                case 'X':rs_send("crystal on/off");break;
-                case 'V':rs_send("Voltage meas on/off");break;
-                case '1':rs_send("Press !,^I to self trig"); break;
-                case '2':rs_send("Press @,^F to make ready"); break;
-                case '3':rs_send("Press #,^C to make busy"); break;
-                case '5':rs_send("Press %,^R for Restart"); break;
+                case 'e':rs_send("echo 0/1");break;
+                case 'b':rs_send("CVR 0-15");break;
+                case 'B':rs_send("CVRR 0-1");break;
+                case 'X':rs_send("Xtal 0/1");break;
+                case 'V':rs_send("Volt meas 0/1");break;
+                case '1':rs_send("!|^I: self trig"); break;
+                case '2':rs_send("@|^F: Ready"); break;
+                case '3':rs_send("#|^C: busy"); break;
+                case '5':rs_send("%|^R: Rest"); break;
                 default:
                          rs_send("[h?][nmtgoeXV1235]");
               }
@@ -517,7 +544,7 @@ static void interruptf(void) __interrupt 0 {
       default:
         if(uartRXi>10){
           uartRXi=0;
-          rs_send("Too Long Instruction");
+          rs_send("TooLongInst");
         }
         uartRXbuf[uartRXi++]=tmp;
     }
